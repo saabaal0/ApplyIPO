@@ -1,0 +1,5 @@
+node_modules
+.env
+playwright-report
+.nyc_output
+.DS_Store

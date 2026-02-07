@@ -1,0 +1,19 @@
+{
+  "name": "meroshare-ipo-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Daily MeroShare IPO/FPO + right-share auto-apply with Telegram notifications (GitHub Actions)",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/multi-user.js",
+    "pw:install": "npx playwright install --with-deps chromium"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.1"
+  }
+}
