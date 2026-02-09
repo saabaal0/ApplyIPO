@@ -3,7 +3,7 @@ name: MeroShare IPO Bot
 on:
   schedule:
     # 15:00 Nepal time (UTC+05:45) = 09:15 UTC
-    - cron: '15 9 * * 1,4,6'   # Mon(1), Thu(4), Sat(6)
+    - cron: '15 9 * * 1,4,6'   # Mon, Thu, Sat
   workflow_dispatch:
 
 jobs:
@@ -27,42 +27,40 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run bot
+      - name: Run MeroShare Bot
         env:
-          # MeroShare (Primary)
-          MEROSHARE_CLIENT_ID: ${{ secrets.MEROSHARE_CLIENT_ID }}
-          MEROSHARE_DP_NAME: ${{ secrets.MEROSHARE_DP_NAME }}
-          MEROSHARE_USERNAME: ${{ secrets.MEROSHARE_USERNAME }}
-          MEROSHARE_PASSWORD: ${{ secrets.MEROSHARE_PASSWORD }}
-
-          # Apply details (Primary)
-          MEROSHARE_BANK_NAME: ${{ secrets.MEROSHARE_BANK_NAME }}
-          MEROSHARE_ACCOUNT_NO: ${{ secrets.MEROSHARE_ACCOUNT_NO }}
-          MEROSHARE_CRN: ${{ secrets.MEROSHARE_CRN }}
-          MEROSHARE_TXN_PIN: ${{ secrets.MEROSHARE_TXN_PIN }}
-
-          # MeroShare (Fallback / Wife)
-          MEROSHARE_CLIENT_ID_WIFE: ${{ secrets.MEROSHARE_CLIENT_ID_WIFE }}
-          MEROSHARE_DP_NAME_WIFE: ${{ secrets.MEROSHARE_DP_NAME_WIFE }}
-          MEROSHARE_USERNAME_WIFE: ${{ secrets.MEROSHARE_USERNAME_WIFE }}
-          MEROSHARE_PASSWORD_WIFE: ${{ secrets.MEROSHARE_PASSWORD_WIFE }}
-
-          # Apply details (Wife)
-          MEROSHARE_BANK_NAME_WIFE: ${{ secrets.MEROSHARE_BANK_NAME_WIFE }}
-          MEROSHARE_ACCOUNT_NO_WIFE: ${{ secrets.MEROSHARE_ACCOUNT_NO_WIFE }}
-          MEROSHARE_CRN_WIFE: ${{ secrets.MEROSHARE_CRN_WIFE }}
-          MEROSHARE_TXN_PIN_WIFE: ${{ secrets.MEROSHARE_TXN_PIN_WIFE }}
-
-          # Telegram
+          # ---------- Telegram ----------
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
-          # Runtime
+          # ========= PROFILE 1 (You) =========
+          MEROSHARE_NAME_1: Sabal
+          MEROSHARE_CLIENT_ID_1: ${{ secrets.MEROSHARE_CLIENT_ID }}
+          MEROSHARE_DP_NAME_1: ${{ secrets.MEROSHARE_DP_NAME }}
+          MEROSHARE_USERNAME_1: ${{ secrets.MEROSHARE_USERNAME }}
+          MEROSHARE_PASSWORD_1: ${{ secrets.MEROSHARE_PASSWORD }}
+          MEROSHARE_BANK_NAME_1: ${{ secrets.MEROSHARE_BANK_NAME }}
+          MEROSHARE_ACCOUNT_NO_1: ${{ secrets.MEROSHARE_ACCOUNT_NO }}
+          MEROSHARE_CRN_1: ${{ secrets.MEROSHARE_CRN }}
+          MEROSHARE_TXN_PIN_1: ${{ secrets.MEROSHARE_TXN_PIN }}
+
+          # ========= PROFILE 2 (Wife) =========
+          MEROSHARE_NAME_2: Sabina
+          MEROSHARE_CLIENT_ID_2: ${{ secrets.MEROSHARE_CLIENT_ID_WIFE }}
+          MEROSHARE_DP_NAME_2: ${{ secrets.MEROSHARE_DP_NAME_WIFE }}
+          MEROSHARE_USERNAME_2: ${{ secrets.MEROSHARE_USERNAME_WIFE }}
+          MEROSHARE_PASSWORD_2: ${{ secrets.MEROSHARE_PASSWORD_WIFE }}
+          MEROSHARE_BANK_NAME_2: ${{ secrets.MEROSHARE_BANK_NAME_WIFE }}
+          MEROSHARE_ACCOUNT_NO_2: ${{ secrets.MEROSHARE_ACCOUNT_NO_WIFE }}
+          MEROSHARE_CRN_2: ${{ secrets.MEROSHARE_CRN_WIFE }}
+          MEROSHARE_TXN_PIN_2: ${{ secrets.MEROSHARE_TXN_PIN_WIFE }}
+
+          # ---------- Runtime ----------
           HEADLESS: "true"
-          RUN_MODE: "multi"  # if your code supports; otherwise ignored
+          RUN_MODE: "multi"
 
         run: |
-          # If you have multi-user runner:
+          echo "Starting MeroShare IPO Bot..."
           if [ -f "src/multi-user.js" ]; then
             node src/multi-user.js
           else
