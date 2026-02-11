@@ -27,6 +27,19 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
+      # SAFE debug: shows YES/NO only (no secret values)
+      - name: Debug env presence (safe)
+        env:
+          MEROSHARE_USERNAME_1: ${{ secrets.MEROSHARE_USERNAME }}
+          MEROSHARE_PASSWORD_1: ${{ secrets.MEROSHARE_PASSWORD }}
+          MEROSHARE_USERNAME_2: ${{ secrets.MEROSHARE_USERNAME_WIFE }}
+          MEROSHARE_PASSWORD_2: ${{ secrets.MEROSHARE_PASSWORD_WIFE }}
+        run: |
+          echo "U1_SET=${MEROSHARE_USERNAME_1:+YES}"
+          echo "P1_SET=${MEROSHARE_PASSWORD_1:+YES}"
+          echo "U2_SET=${MEROSHARE_USERNAME_2:+YES}"
+          echo "P2_SET=${MEROSHARE_PASSWORD_2:+YES}"
+
       - name: Run MeroShare Bot
         env:
           # ---------- Telegram ----------
@@ -61,8 +74,4 @@ jobs:
 
         run: |
           echo "Starting MeroShare IPO Bot..."
-          if [ -f "src/multi-user.js" ]; then
-            node src/multi-user.js
-          else
-            npm start
-          fi
+          node src/multi-user.js
