@@ -131,9 +131,7 @@ function runSingleProfile(profile) {
   return new Promise((resolve) => {
     const env = buildChildEnv(process.env, profile);
 
-    console.log(`\n==============================`);
     console.log(`Running for: ${profile.label}`);
-    console.log(`==============================\n`);
 
     const child = spawn(process.execPath, ['src/index.js'], {
       env,

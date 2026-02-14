@@ -33,7 +33,7 @@ async function main() {
   let token;
   try {
     token = await api.login();
-    console.log("Login successful - token obtained");
+    log.info("API login successful");
   } catch (e) {
     report.errors.push(e.message);
     await tg.send(buildDailyReport(report));
@@ -43,9 +43,6 @@ async function main() {
   let rawIssues = [];
   try {
     rawIssues = await api.getApplicableIssues(token);
-    console.log("=== DEBUG: Raw applicableIssue Response ===");
-    console.log(JSON.stringify(rawIssues, null, 2));
-    console.log("=== End Raw ===");
   } catch (e) {
     report.errors.push(`ApplicableIssue: ${e.message}`);
     token = await api.login().catch(() => token);
@@ -60,10 +57,8 @@ async function main() {
   let activeForms = [];
   try {
     activeForms = await api.getAllActiveApplicantForms(token, { pageSize: 200, maxPages: 5 });
-    console.log(`Active applicant forms found: ${activeForms.length}`);
-    console.log("Active forms companyShareIds:", activeForms.map(f => f.companyShareId));
   } catch (e) {
-    console.warn("Failed to fetch active forms:", e.message);
+    log.warn("Failed to fetch active forms: " + e.message);
   }
 
   const appliedCompanyIds = new Set(activeForms.map(f => Number(f.companyShareId)));
@@ -84,20 +79,8 @@ async function main() {
     };
   });
 
-  console.log(
-    "Classified issues:",
-    classified.map(i => ({
-      scrip: i.scrip,
-      companyName: i.companyName,
-      subGroup: i.subGroup,
-      eligible: i.eligible,
-      alreadyApplied: i.alreadyApplied,
-      skipReason: i.skipReason || "none",
-      applicantFormId: i.applicantFormId ? "present" : "missing"
-    }))
-  );
-
   const eligible = classified.filter(i => i.eligible);
+  log.info(`Issues: ${rawIssues.length} found, ${eligible.length} eligible to apply`);
   report.eligibleCount = eligible.length;
 
   // Fill buckets based on classification

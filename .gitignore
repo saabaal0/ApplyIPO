@@ -3,3 +3,5 @@ node_modules
 playwright-report
 .nyc_output
 .DS_Store
+*.png
+.gitignore

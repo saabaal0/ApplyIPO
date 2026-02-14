@@ -22,8 +22,8 @@ function addList(lines, title, items, lineFn) {
 function formatIssueLine(x) {
   const scrip = x?.scrip || '';
   const name = x?.companyName || '';
-  const reason = x?.reason ? ` (${x.reason})` : '';
-  return `${scrip} — ${name}${reason}`;
+  const note = (x?.note || x?.reason || '').trim();
+  return note ? `${scrip} — ${name} (${note})` : `${scrip} — ${name}`;
 }
 
 
