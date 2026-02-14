@@ -46,9 +46,10 @@ jobs:
           # Telegram
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          
 
           # Profile 1 (Sabal)
-          MEROSHARE_NAME_1: "Sabal"
+          USER_LABEL_1: "Sabal"
           MEROSHARE_CLIENT_ID_1: ${{ secrets.MEROSHARE_CLIENT_ID }}
           MEROSHARE_DP_NAME_1: ${{ secrets.MEROSHARE_DP_NAME }}
           MEROSHARE_USERNAME_1: ${{ secrets.MEROSHARE_USERNAME }}
@@ -59,7 +60,7 @@ jobs:
           MEROSHARE_TXN_PIN_1: ${{ secrets.MEROSHARE_TXN_PIN }}
 
           # Profile 2 (Sabina)
-          MEROSHARE_NAME_2: "Sabina"
+          USER_LABEL_2: "Sabina"
           MEROSHARE_CLIENT_ID_2: ${{ secrets.MEROSHARE_CLIENT_ID_WIFE }}
           MEROSHARE_DP_NAME_2: ${{ secrets.MEROSHARE_DP_NAME_WIFE }}
           MEROSHARE_USERNAME_2: ${{ secrets.MEROSHARE_USERNAME_WIFE }}
