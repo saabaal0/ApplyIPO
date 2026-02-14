@@ -2,8 +2,7 @@ name: MeroShare IPO Bot
 
 on:
   schedule:
-    # 15:00 Nepal time (UTC+05:45) = 09:15 UTC
-    - cron: '15 9 * * 1,4,6'   # Mon, Thu, Sat
+    - cron: '15 9 * * 1,4,6'   # Mon, Thu, Sat @ 15:00 NPT (09:15 UTC)
   workflow_dispatch:
 
 jobs:
@@ -15,39 +14,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      # SAFE debug: shows YES/NO only (no secret values)
-      - name: Debug env presence (safe)
+      # Safe debug: confirm secrets are present
+      - name: Debug secrets presence
         env:
-          MEROSHARE_USERNAME_1: ${{ secrets.MEROSHARE_USERNAME }}
-          MEROSHARE_PASSWORD_1: ${{ secrets.MEROSHARE_PASSWORD }}
-          MEROSHARE_USERNAME_2: ${{ secrets.MEROSHARE_USERNAME_WIFE }}
-          MEROSHARE_PASSWORD_2: ${{ secrets.MEROSHARE_PASSWORD_WIFE }}
+          U1: ${{ secrets.MEROSHARE_USERNAME }}
+          P1: ${{ secrets.MEROSHARE_PASSWORD }}
+          U2: ${{ secrets.MEROSHARE_USERNAME_WIFE }}
+          P2: ${{ secrets.MEROSHARE_PASSWORD_WIFE }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          echo "U1_SET=${MEROSHARE_USERNAME_1:+YES}"
-          echo "P1_SET=${MEROSHARE_PASSWORD_1:+YES}"
-          echo "U2_SET=${MEROSHARE_USERNAME_2:+YES}"
-          echo "P2_SET=${MEROSHARE_PASSWORD_2:+YES}"
+          echo "Secrets status:"
+          echo "Profile 1 user/pass: ${U1:+YES}/${P1:+YES}"
+          echo "Profile 2 user/pass: ${U2:+YES}/${P2:+YES}"
+          echo "Telegram: ${TG_TOKEN:+YES}/${TG_CHAT:+YES}"
 
       - name: Run MeroShare Bot
         env:
-          # ---------- Telegram ----------
+          # Telegram
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
-          # ========= PROFILE 1 (You) =========
-          MEROSHARE_NAME_1: Sabal
+          # Profile 1 (Sabal)
+          MEROSHARE_NAME_1: "Sabal"
           MEROSHARE_CLIENT_ID_1: ${{ secrets.MEROSHARE_CLIENT_ID }}
           MEROSHARE_DP_NAME_1: ${{ secrets.MEROSHARE_DP_NAME }}
           MEROSHARE_USERNAME_1: ${{ secrets.MEROSHARE_USERNAME }}
@@ -57,8 +58,8 @@ jobs:
           MEROSHARE_CRN_1: ${{ secrets.MEROSHARE_CRN }}
           MEROSHARE_TXN_PIN_1: ${{ secrets.MEROSHARE_TXN_PIN }}
 
-          # ========= PROFILE 2 (Wife) =========
-          MEROSHARE_NAME_2: Sabina
+          # Profile 2 (Sabina)
+          MEROSHARE_NAME_2: "Sabina"
           MEROSHARE_CLIENT_ID_2: ${{ secrets.MEROSHARE_CLIENT_ID_WIFE }}
           MEROSHARE_DP_NAME_2: ${{ secrets.MEROSHARE_DP_NAME_WIFE }}
           MEROSHARE_USERNAME_2: ${{ secrets.MEROSHARE_USERNAME_WIFE }}
@@ -68,10 +69,8 @@ jobs:
           MEROSHARE_CRN_2: ${{ secrets.MEROSHARE_CRN_WIFE }}
           MEROSHARE_TXN_PIN_2: ${{ secrets.MEROSHARE_TXN_PIN_WIFE }}
 
-          # ---------- Runtime ----------
+          # Runtime
           HEADLESS: "true"
           RUN_MODE: "multi"
 
-        run: |
-          echo "Starting MeroShare IPO Bot..."
-          node src/multi-user.js
+        run: node src/multi-user.js
