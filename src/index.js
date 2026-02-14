@@ -1,11 +1,12 @@
-const { getConfig } = require('./config');
-const log = require('./utils/logger');
-const { MeroShareApi } = require('./api/meroshareApi');
-const { classify } = require('./services/IssueService');
-const { AutomationRunner } = require('./services/AutomationRunner');
-const { TelegramClient } = require('./telegram/TelegramClient');
-const { buildDailyReport } = require('./telegram/ReportBuilder');
-const { retry } = require('./utils/retry');
+// src/index.js
+const { getConfig } = require("./config");
+const log = require("./utils/logger");
+const { MeroShareApi } = require("./api/meroshareApi");
+const { classify } = require("./services/IssueService");
+const { AutomationRunner } = require("./services/AutomationRunner");
+const { TelegramClient } = require("./telegram/TelegramClient");
+const { buildDailyReport } = require("./telegram/ReportBuilder");
+const { retry } = require("./utils/retry");
 
 async function main() {
   const cfg = getConfig();
@@ -15,7 +16,7 @@ async function main() {
     apiBaseUrl: cfg.meroshare.apiBaseUrl,
     clientId: cfg.meroshare.clientId,
     username: cfg.meroshare.username,
-    password: cfg.meroshare.password
+    password: cfg.meroshare.password,
   });
 
   const report = {
@@ -26,12 +27,13 @@ async function main() {
     skipped: [],
     notEligible: [],
     manualCheck: [],
-    errors: []
+    errors: [],
   };
 
   let token;
   try {
     token = await api.login();
+    console.log("Login successful - token obtained");
   } catch (e) {
     report.errors.push(e.message);
     await tg.send(buildDailyReport(report));
@@ -41,8 +43,10 @@ async function main() {
   let rawIssues = [];
   try {
     rawIssues = await api.getApplicableIssues(token);
+    console.log("=== DEBUG: Raw applicableIssue Response ===");
+    console.log(JSON.stringify(rawIssues, null, 2));
+    console.log("=== End Raw ===");
   } catch (e) {
-    // try re-login once
     report.errors.push(`ApplicableIssue: ${e.message}`);
     token = await api.login().catch(() => token);
     rawIssues = await api.getApplicableIssues(token).catch(() => []);
@@ -50,100 +54,173 @@ async function main() {
 
   report.foundCount = rawIssues.length;
 
-  const classified = rawIssues.map(classify);
+  // ──────────────────────────────────────────────
+  // NEW: Cross-check against active applicant forms (real source of truth)
+  // ──────────────────────────────────────────────
+  let activeForms = [];
+  try {
+    activeForms = await api.getAllActiveApplicantForms(token, { pageSize: 200, maxPages: 5 });
+    console.log(`Active applicant forms found: ${activeForms.length}`);
+    console.log("Active forms companyShareIds:", activeForms.map(f => f.companyShareId));
+  } catch (e) {
+    console.warn("Failed to fetch active forms:", e.message);
+  }
 
-  const eligible = classified.filter((i) => i.eligible);
+  const appliedCompanyIds = new Set(activeForms.map(f => Number(f.companyShareId)));
+
+  // Classify using only applicantFormId from applicableIssue + active forms check
+  const classified = rawIssues.map(issue => {
+    const fromActiveForms = appliedCompanyIds.has(Number(issue.companyShareId));
+    const c = classify(issue);
+    return {
+      ...c,
+      alreadyApplied: fromActiveForms || Boolean(issue.applicantFormId),
+      eligible: !fromActiveForms && !Boolean(issue.applicantFormId) && c.eligible,
+      skipReason: fromActiveForms
+        ? "Already applied (found in active forms)"
+        : Boolean(issue.applicantFormId)
+        ? "Already applied (applicantFormId present)"
+        : c.skipReason || "none"
+    };
+  });
+
+  console.log(
+    "Classified issues:",
+    classified.map(i => ({
+      scrip: i.scrip,
+      companyName: i.companyName,
+      subGroup: i.subGroup,
+      eligible: i.eligible,
+      alreadyApplied: i.alreadyApplied,
+      skipReason: i.skipReason || "none",
+      applicantFormId: i.applicantFormId ? "present" : "missing"
+    }))
+  );
+
+  const eligible = classified.filter(i => i.eligible);
   report.eligibleCount = eligible.length;
 
-  // Fill already applied / skipped buckets based on API
+  // Fill buckets based on classification
   for (const i of classified) {
     if (i.alreadyApplied) {
-      const note = i.doneState ? `Status: ${i.statusName} (${i.doneState})` : `Status: ${i.statusName || 'UNKNOWN'}`;
-      report.alreadyApplied.push({ scrip: i.scrip, companyName: i.companyName, note });
+      report.alreadyApplied.push({
+        scrip: i.scrip,
+        companyName: i.companyName,
+        note: i.skipReason || `Status: ${i.statusName || "UNKNOWN"}`
+      });
     } else if (!i.eligible) {
-      if (i.skipReason) report.skipped.push({ scrip: i.scrip, companyName: i.companyName, note: i.skipReason });
+      if (i.skipReason) {
+        report.skipped.push({
+          scrip: i.scrip,
+          companyName: i.companyName,
+          note: i.skipReason
+        });
+      }
     }
   }
 
-  // If nothing to apply and no right-share eligibility checks needed, just notify.
   const needsUI = eligible.length > 0;
   let runner = null;
 
   try {
     if (needsUI) {
-      runner = new AutomationRunner({
-        baseUrl: cfg.meroshare.baseUrl,
-        loginUrl: cfg.meroshare.loginUrl,
-        dpName: cfg.meroshare.dpName,
-        username: cfg.meroshare.username,
-        password: cfg.meroshare.password,
-        bankName: cfg.meroshare.bankName,
-        accountNo: cfg.meroshare.accountNo,
-        crn: cfg.meroshare.crn,
-        txnPin: cfg.meroshare.txnPin
-      }, cfg.runtime);
+      runner = new AutomationRunner(
+        {
+          baseUrl: cfg.meroshare.baseUrl,
+          loginUrl: cfg.meroshare.loginUrl,
+          dpName: cfg.meroshare.dpName,
+          username: cfg.meroshare.username,
+          password: cfg.meroshare.password,
+          bankName: cfg.meroshare.bankName,
+          accountNo: cfg.meroshare.accountNo,
+          crn: cfg.meroshare.crn,
+          txnPin: cfg.meroshare.txnPin,
+        },
+        cfg.runtime,
+      );
 
       await runner.start();
       await runner.login();
 
       for (const issue of eligible) {
-        // Right Share eligibility: must hold parent company > 0
-        if (issue.kind === 'RIGHT_SHARE') {
+        // Right-share holding check (unchanged)
+        if (issue.kind === "RIGHT_SHARE") {
           let bal = 0;
           try {
             bal = await runner.getHoldingForScrip(issue.scrip);
           } catch (e) {
-            report.manualCheck.push({ scrip: issue.scrip, companyName: issue.companyName, note: `Could not verify holding (error: ${e.message})` });
+            report.manualCheck.push({
+              scrip: issue.scrip,
+              companyName: issue.companyName,
+              note: `Could not verify holding: ${e.message}`
+            });
             continue;
           }
-
-          if (!bal || bal <= 0) {
-            report.notEligible.push({ scrip: issue.scrip, companyName: issue.companyName, note: 'Right Share: parent holding is 0 (skipped)' });
+          if (bal <= 0) {
+            report.notEligible.push({
+              scrip: issue.scrip,
+              companyName: issue.companyName,
+              note: "Right Share: no parent holding"
+            });
             continue;
           }
         }
 
         const result = await runner.applyIssue(issue, null);
 
-        if (result.status === 'already') {
-          report.alreadyApplied.push({ scrip: issue.scrip, companyName: issue.companyName, note: result.note });
+        if (result.status === "already") {
+          report.alreadyApplied.push({
+            scrip: issue.scrip,
+            companyName: issue.companyName,
+            note: result.note
+          });
           continue;
         }
 
-        if (result.status === 'failed') {
-          report.manualCheck.push({ scrip: issue.scrip, companyName: issue.companyName, note: result.note });
+        if (result.status === "failed" || result.status === "manual") {
+          report.manualCheck.push({
+            scrip: issue.scrip,
+            companyName: issue.companyName,
+            note: result.note
+          });
           continue;
         }
 
-        if (result.status === 'manual') {
-          report.manualCheck.push({ scrip: issue.scrip, companyName: issue.companyName, note: result.note });
-          continue;
-        }
+        // Verification (unchanged)
+        const verify = await retry(
+          async () => {
+            let list = await api.getApplicableIssues(token);
+            return list.find(x => Number(x.companyShareId) === Number(issue.companyShareId)) || null;
+          },
+          { retries: 2, delayMs: 1500 }
+        ).catch(() => null);
 
-        // Applied: verify via API first
-        const verify = await retry(async () => {
-          let list = await api.getApplicableIssues(token);
-          const found = list.find((x) => Number(x.companyShareId) === Number(issue.companyShareId));
-          return found || null;
-        }, {
-          retries: 2,
-          delayMs: 1500,
-          onRetry: (e, attempt) => log.warn(`Verify retry ${attempt} for ${issue.scrip}: ${e.message}`)
-        }).catch(() => null);
-
-        if (verify && (verify.applicantFormId || ['TRANSACTION_SUCCESS', 'APPROVED'].includes(String(verify.statusName || '').toUpperCase()))) {
+        if (
+          verify &&
+          (verify.applicantFormId ||
+            ["TRANSACTION_SUCCESS", "APPROVED", "BLOCKED_APPROVE"].includes(
+              String(verify.statusName || "").toUpperCase()
+            ))
+        ) {
           report.applied.push({
             scrip: issue.scrip,
             companyName: issue.companyName,
-            note: `Submitted. Status: ${verify.statusName}${verify.applicantFormId ? ` (formId ${verify.applicantFormId})` : ''}`
+            note: `Submitted. Status: ${verify.statusName || "UNKNOWN"}${verify.applicantFormId ? ` (ID ${verify.applicantFormId})` : ""}`
           });
         } else {
-          // UI fallback
           const ui = await runner.verifyInApplicationReport(issue.scrip).catch(() => ({ found: false }));
           if (ui?.found) {
-            report.applied.push({ scrip: issue.scrip, companyName: issue.companyName, note: `Submitted (verified in Application Report: ${ui.status || 'UNKNOWN'})` });
+            report.applied.push({
+              scrip: issue.scrip,
+              companyName: issue.companyName,
+              note: `Submitted (verified in report: ${ui.status || "UNKNOWN"})`
+            });
           } else {
-            report.manualCheck.push({ scrip: issue.scrip, companyName: issue.companyName, note: 'Applied but could not verify—check Current Issue / Application Report' });
+            report.manualCheck.push({
+              scrip: issue.scrip,
+              companyName: issue.companyName,
+              note: "Applied but could not verify — check manually"
+            });
           }
         }
       }
@@ -157,14 +234,12 @@ async function main() {
   const msg = buildDailyReport(report);
   await tg.send(msg);
 
-  // If we had errors and nothing applied, fail the action to get visibility in logs.
   if (report.errors.length > 0 && report.applied.length === 0) {
-    throw new Error(report.errors.join(' | '));
+    throw new Error(report.errors.join(" | "));
   }
 }
 
-main().catch(async (e) => {
-  // One more attempt to at least print something useful in Actions logs
+main().catch(async e => {
   log.error(e.stack || e.message);
   process.exitCode = 1;
 });

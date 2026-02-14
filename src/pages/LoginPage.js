@@ -126,6 +126,7 @@ class LoginPage {
     await this.goto();
     await this.selectDP(dpName);
     await this.fillCredentials(username, password);
+    await this.page.waitForTimeout(1500);
     await this.submit();
 
     // Wait until URL changes away from login or dashboard items appear

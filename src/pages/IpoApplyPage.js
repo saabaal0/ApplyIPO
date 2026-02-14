@@ -9,335 +9,280 @@ class IpoApplyPage {
 
   async waitReady() {
     await this.page.waitForSelector('body', { timeout: 30000 });
-    await this.page.waitForTimeout(800);
-  }
-
-  async selectFromSelect2ByLabel(labelText, optionText) {
-    const p = this.page;
-
-    // Try to find a label and a nearby select2 container
-    const label = p.locator(`text=${labelText}`).first();
-    if (await label.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const container = label
-        .locator(
-          'xpath=ancestor::*[self::div or self::label][1]/following::span[contains(@class,"select2")][1]'
-        )
-        .first();
-
-      if (await container.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await container.click();
-        await p.waitForTimeout(400);
-
-        const search = p.locator('input.select2-search__field').first();
-        if (await search.isVisible({ timeout: 1500 }).catch(() => false)) {
-          await search.fill(String(optionText));
-          await p.waitForTimeout(400);
-        }
-
-        const opt = p.locator(`li.select2-results__option:has-text("${optionText}")`).first();
-        if (await opt.isVisible({ timeout: 2500 }).catch(() => false)) {
-          await opt.click();
-          await p.waitForTimeout(500);
-          return true;
-        }
-      }
-    }
-
-    // Fallback: try native select
-    const selects = await p.locator('select').all();
-    for (const s of selects) {
-      const txt = ((await s.textContent().catch(() => '')) || '').toLowerCase();
-      if (txt.includes(String(optionText).toLowerCase())) {
-        try {
-          await s.selectOption({ label: optionText });
-          return true;
-        } catch {}
-      }
-    }
-
-    return false;
+    await this.page.waitForTimeout(1500); // extra stability
   }
 
   async fillBankAndAccount({ bankName, accountNo }) {
     const p = this.page;
+    console.log(`[fillBankAndAccount] Bank: "${bankName}", Account: "${accountNo}"`);
 
-    const pickFirstOption = async () => {
-      const firstOpt = p.locator('li.select2-results__option').first();
-      if (await firstOpt.isVisible({ timeout: 2500 }).catch(() => false)) {
-        await firstOpt.click();
-        await p.waitForTimeout(500);
-        return true;
-      }
-      return false;
-    };
+    await p.waitForTimeout(1500);
 
-    // ---- BANK ----
-    const bankLabels = ['Select Bank', 'Bank', 'Choose Bank'];
-    let bankPicked = false;
+    // Bank select
+    const bankSelect = p.locator('select[name="selectBank"]');
+    if (await bankSelect.isVisible({ timeout: 10000 }).catch(() => false)) {
+      console.log('[Bank] select[name="selectBank"] visible');
 
-    if (bankName) {
-      for (const label of bankLabels) {
-        bankPicked = await this.selectFromSelect2ByLabel(label, bankName);
-        if (bankPicked) break;
-      }
-    }
-
-    if (!bankPicked) {
-      const firstSelect2 = p.locator('span.select2-selection').first();
-      if (await firstSelect2.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await firstSelect2.click();
-        await p.waitForTimeout(350);
-
-        if (bankName) {
-          const search = p.locator('input.select2-search__field').first();
-          if (await search.isVisible({ timeout: 1200 }).catch(() => false)) {
-            await search.fill(bankName);
-            await p.waitForTimeout(350);
-          }
-          const opt = p.locator(`li.select2-results__option:has-text("${bankName}")`).first();
-          if (await opt.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await opt.click();
-            await p.waitForTimeout(500);
-            bankPicked = true;
-          }
+      try {
+        await bankSelect.selectOption({ label: bankName });
+        console.log('[Bank] Selected via exact label');
+      } catch {
+        try {
+          await bankSelect.selectOption(bankName); // try value
+          console.log('[Bank] Selected via value');
+        } catch {
+          console.warn('[Bank] Could not select bank - trying first option');
+          await bankSelect.selectOption({ index: 1 }); // fallback
         }
-
-        if (!bankPicked) bankPicked = await pickFirstOption();
       }
+      await p.waitForTimeout(1200);
+    } else {
+      console.warn('[Bank] select[name="selectBank"] NOT visible');
     }
 
-    if (!bankPicked) throw new Error('Bank not selectable (select2 not found or no options)');
+    // Account select
+    // Account select
+const accountSelect = p.locator('select[name="accountNumber"]');
 
-    // ---- ACCOUNT ----
-    let accountPicked = false;
+if (await accountSelect.isVisible({ timeout: 10000 }).catch(() => false)) {
+  console.log('[Account] select[name="accountNumber"] visible');
 
-    const acctLabels = ['Select Account Number', 'Account Number', 'Choose Account'];
-    if (accountNo) {
-      for (const label of acctLabels) {
-        accountPicked = await this.selectFromSelect2ByLabel(label, accountNo);
-        if (accountPicked) break;
-      }
+  try {
+    // Try exact full label first (from .env)
+    await accountSelect.selectOption({ label: accountNo });
+    console.log('[Account] Selected exact label from .env');
+  } catch {
+    console.log('[Account] Exact label failed → trying partial match on number');
+
+    // Get all options
+    const options = await accountSelect.locator('option').allInnerTexts();
+
+    // Find option that contains the account number
+    const matchingText = options.find(opt => opt.trim().includes(accountNo));
+
+    if (matchingText) {
+      await accountSelect.selectOption({ label: matchingText.trim() });
+      console.log('[Account] Selected via partial match:', matchingText.trim());
+    } else {
+      console.warn('[Account] No matching account option found in dropdown');
+      // Fallback: select first option if desperate (only for testing!)
+      // await accountSelect.selectOption({ index: 1 });
     }
-
-    if (!accountPicked) {
-      const sels = p.locator('span.select2-selection');
-      const cnt = await sels.count().catch(() => 0);
-      const accountDropdown = cnt >= 2 ? sels.nth(1) : sels.first();
-
-      if (await accountDropdown.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await accountDropdown.click();
-        await p.waitForTimeout(350);
-
-        if (accountNo) {
-          const opt = p.locator(`li.select2-results__option:has-text("${accountNo}")`).first();
-          if (await opt.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await opt.click();
-            await p.waitForTimeout(500);
-            accountPicked = true;
-          }
-        }
-
-        if (!accountPicked) accountPicked = await pickFirstOption();
-      }
-    }
-
-    if (!accountPicked) throw new Error('Account not selectable (no options)');
   }
 
-  async fillKitta(minUnit) {
-    const p = this.page;
-    const kittaSelectors = [
-      'input[formcontrolname="appliedKitta"]',
-      'input[name*="kitta" i]',
-      'input[placeholder*="kitta" i]',
-      'input[type="number"]'
-    ];
+  await p.waitForTimeout(1200);
+} else {
+  console.warn('[Account] select[name="accountNumber"] NOT visible');
+}
+  }
 
-    for (const sel of kittaSelectors) {
-      const inp = p.locator(sel).first();
-      if (await inp.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await inp.fill('');
-        await inp.type(String(minUnit), { delay: 40 });
-        return;
-      }
+  async fillKitta(kitta) {
+    const p = this.page;
+    const kittaInput = p.locator("#appliedKitta");
+
+    console.log(`[fillKitta] Trying to fill: ${kitta}`);
+
+    if (await kittaInput.isVisible({ timeout: 10000 }).catch(() => false)) {
+      await kittaInput.fill(String(kitta));
+      await kittaInput.press('Tab'); // trigger validation
+      console.log('[fillKitta] Filled successfully');
+    } else {
+      console.warn('[fillKitta] #appliedKitta not visible');
+      await p.screenshot({ path: `debug-kitta-missing-${Date.now()}.png` });
     }
-    throw new Error('Kitta input not found');
   }
 
   async fillCRN(crn) {
     const p = this.page;
-    const selectors = [
-      'input[formcontrolname="crnNumber"]',
-      'input[name*="crn" i]',
-      'input[placeholder*="Enter CRN" i]',
-      'input[placeholder*="crn" i]',
-      'xpath=//*[normalize-space()="CRN"]/following::input[1]'
-    ];
+    const crnInput = p.locator("#crnNumber");
 
-    for (const sel of selectors) {
-      const inp = p.locator(sel).first();
-      if (await inp.isVisible({ timeout: 2500 }).catch(() => false)) {
-        await inp.fill('');
-        await inp.type(String(crn), { delay: 40 });
-        return;
-      }
+    console.log(`[fillCRN] Trying to fill: ${crn}`);
+
+    if (await crnInput.isVisible({ timeout: 10000 }).catch(() => false)) {
+      await crnInput.fill(crn);
+      await crnInput.press('Tab');
+      console.log('[fillCRN] Filled successfully');
+    } else {
+      console.warn('[fillCRN] #crnNumber not visible');
+      await p.screenshot({ path: `debug-crn-missing-${Date.now()}.png` });
     }
-    throw new Error('CRN input not found');
   }
 
   async acceptDisclaimer() {
     const p = this.page;
+    const checkbox = p.locator('input[type="checkbox"][name*="disclaimer"], input[type="checkbox"]').first();
 
-    // Prefer checkbox near disclaimer text
-    const cbNearText = p
-      .locator(
-        'xpath=//*[contains(normalize-space(),"I hereby declare")]/preceding::input[@type="checkbox"][1]'
-      )
-      .first();
-
-    if (await cbNearText.isVisible({ timeout: 1500 }).catch(() => false)) {
-      const checked = await cbNearText.isChecked().catch(() => false);
-      if (!checked) {
-        await cbNearText.click({ force: true }).catch(() => {});
-        await p.waitForTimeout(250);
+    if (await checkbox.isVisible({ timeout: 8000 }).catch(() => false)) {
+      if (!(await checkbox.isChecked())) {
+        await checkbox.check({ force: true });
+        console.log('[Disclaimer] Checked');
+      } else {
+        console.log('[Disclaimer] Already checked');
       }
-      return;
-    }
-
-    // Fallback: first checkbox
-    const cb = p.locator('input[type="checkbox"]').first();
-    if (await cb.isVisible({ timeout: 1500 }).catch(() => false)) {
-      const checked = await cb.isChecked().catch(() => false);
-      if (!checked) {
-        await cb.click({ force: true }).catch(() => {});
-        await p.waitForTimeout(250);
-      }
+    } else {
+      console.warn('[Disclaimer] Checkbox not found');
     }
   }
 
   async clickProceed() {
     const p = this.page;
 
-    const proceed = p.locator('button:has-text("Proceed")').first();
-    if (await proceed.isVisible({ timeout: 2500 }).catch(() => false)) {
-      await proceed.click();
-      await p.waitForTimeout(1200);
-      return;
-    }
+    const proceedBtn = p.getByRole('button', { name: /Proceed|Continue|Next/i })
+      .or(p.locator('button:has-text("Proceed")'))
+      .or(p.locator('button[type="submit"]:has-text("Proceed")'))
+      .first();
 
-    const proceedCaps = p.locator('button:has-text("PROCEED")').first();
-    if (await proceedCaps.isVisible({ timeout: 2500 }).catch(() => false)) {
-      await proceedCaps.click();
-      await p.waitForTimeout(1200);
-      return;
-    }
+    console.log('[Proceed] Looking for button');
 
-    throw new Error('Proceed button not found');
+    if (await proceedBtn.isVisible({ timeout: 10000 }).catch(() => false)) {
+      await proceedBtn.click({ force: true, timeout: 10000 });
+      console.log('[Proceed] Clicked Proceed button');
+      await p.waitForTimeout(3000);
+    } else {
+      console.warn('[Proceed] No Proceed button found');
+      await p.screenshot({ path: `debug-proceed-missing-${Date.now()}.png` });
+    }
   }
 
   async fillTxnPin(pin) {
     const p = this.page;
-
-    // Prefer the PIN prompt view you showed
-    const prompt = p.locator('text=Please enter your 4 digits transaction PIN to proceed').first();
-    if (await prompt.isVisible({ timeout: 8000 }).catch(() => false)) {
-      // Choose first visible input after prompt appears
-      const inputs = p.locator('input');
-      const count = await inputs.count().catch(() => 0);
-
-      for (let i = 0; i < count; i++) {
-        const candidate = inputs.nth(i);
-        if (await candidate.isVisible({ timeout: 500 }).catch(() => false)) {
-          await candidate.fill('');
-          await candidate.type(String(pin), { delay: 60 });
-          return;
+  
+    const pinInput = p.locator('#transactionPIN')
+      .or(p.locator('input[name="transactionPIN"]'))
+      .or(p.locator('[name="transactionPIN"]'))
+      .first();
+  
+    console.log('[fillTxnPin] Looking for PIN input');
+  
+    if (await pinInput.isVisible({ timeout: 15000 }).catch(() => false)) {
+      console.log('[fillTxnPin] PIN input visible - filling');
+  
+      await pinInput.fill('');
+      await pinInput.pressSequentially(pin, { delay: 150 });
+      await pinInput.press('Tab'); // blur
+  
+      console.log('[fillTxnPin] PIN filled and blurred');
+  
+      const applyBtn = p.getByRole('button', { name: /Apply/i })
+        .or(p.locator('button:has-text("Apply")'))
+        .or(p.locator('button[type="submit"]:has-text("Apply")'))
+        .first();
+  
+      await applyBtn.waitFor({ state: 'visible', timeout: 20000 });
+      console.log('[fillTxnPin] Apply button visible');
+  
+      // Wait for enabled + extra safety delay
+      let attempts = 0;
+      while (attempts < 25) {
+        const isEnabled = await applyBtn.evaluate(btn => !btn.disabled);
+        if (isEnabled) {
+          console.log('[fillTxnPin] Apply button enabled after', attempts, 'attempts');
+          await p.waitForTimeout(1500); // <--- IMPORTANT DELAY: give UI time to stabilize
+          break;
         }
+        await p.waitForTimeout(500);
+        attempts++;
       }
-
-      throw new Error('Transaction PIN input not found on PIN screen');
-    }
-
-    // Fallback selectors
-    const selectors = [
-      'input[formcontrolname="transactionPin"]',
-      'input[name*="transaction" i]',
-      'input[name*="pin" i]',
-      'input[placeholder*="pin" i]',
-      'input[type="password"]'
-    ];
-
-    for (const sel of selectors) {
-      const inp = p.locator(sel).first();
-      if (await inp.isVisible({ timeout: 4000 }).catch(() => false)) {
-        await inp.fill('');
-        await inp.type(String(pin), { delay: 60 });
-        return;
+  
+      if (attempts >= 25) {
+        console.warn('[fillTxnPin] Apply button never enabled');
+        await p.screenshot({ path: `debug-pin-button-never-enabled-${Date.now()}.png` });
       }
+  
+    } else {
+      console.warn('[fillTxnPin] #transactionPIN not visible');
+      await p.screenshot({ path: `debug-pin-missing-${Date.now()}.png` });
     }
-
-    throw new Error('Transaction PIN input not found');
   }
-
   async clickApply() {
     const p = this.page;
-
-    // Prefer the Apply button on the PIN prompt screen you showed
-    const pinPrompt = p.locator('text=Please enter your 4 digits transaction PIN to proceed').first();
-    if (await pinPrompt.isVisible({ timeout: 8000 }).catch(() => false)) {
-      const applyBtn = p.locator('button:has-text("Apply")').first();
-      if (await applyBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await applyBtn.click();
-        await p.waitForTimeout(1500);
-        return;
-      }
-      throw new Error('Apply button not found on PIN screen');
+  
+    const applyBtn = p.getByRole('button', { name: /Apply/i })
+      .or(p.locator('button:has-text("Apply")'))
+      .or(p.locator('button[type="submit"]:has-text("Apply")'))
+      .first();
+  
+    console.log('[clickApply - Final] Looking for final Apply button on PIN screen');
+  
+    if (!(await applyBtn.isVisible({ timeout: 15000 }).catch(() => false))) {
+      console.warn('[clickApply - Final] Final Apply button NOT visible');
+      await p.screenshot({ path: `debug-final-apply-missing-${Date.now()}.png`, fullPage: true });
+      return;
     }
-
-    // Fallback: generic apply/submit buttons
-    const btns = [
-      'button[type="submit"]:has-text("Submit")',
-      'button[type="submit"]:has-text("Apply")',
-      'button:has-text("Submit")',
-      'button:has-text("Apply")',
-      'button:has-text("SUBMIT")',
-      'button:has-text("APPLY")'
-    ];
-
-    for (const sel of btns) {
-      const b = p.locator(sel).first();
-      if (await b.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await b.click();
-        await p.waitForTimeout(1500);
-        return;
+  
+    console.log('[clickApply - Final] Final Apply button is visible');
+  
+    let clickSuccess = false;
+  
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      console.log(`[clickApply - Final] Attempt ${attempt}/${5}`);
+  
+      // Check enabled state
+      const isEnabled = await applyBtn.evaluate(btn => !btn.disabled && btn.offsetParent !== null);
+      console.log(`[clickApply - Final] Button enabled? ${isEnabled}`);
+  
+      if (!isEnabled) {
+        console.warn('[clickApply - Final] Button disabled on attempt', attempt);
+        await p.waitForTimeout(2000);
+        continue;
       }
+  
+      // Normal Playwright click
+      try {
+        await applyBtn.click({ force: true, timeout: 12000 });
+        console.log('[clickApply - Final] Normal click executed on attempt', attempt);
+      } catch (e) {
+        console.log('[clickApply - Final] Normal click error on attempt', attempt, ':', e.message);
+      }
+  
+      // Mouse fallback click (bypasses most actionability checks)
+      const box = await applyBtn.boundingBox().catch(() => null);
+      if (box) {
+        console.log('[clickApply - Final] Mouse fallback click on attempt', attempt);
+        await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { delay: 100 });
+      }
+  
+      // Delay after click
+      await p.waitForTimeout(4000);
+  
+      // Check for success indicators
+      const hasSuccess = await p.locator('text=applied|success|submitted|TRANSACTION_SUCCESS|Share has been applied successfully').isVisible({ timeout: 6000 }).catch(() => false);
+      if (hasSuccess) {
+        clickSuccess = true;
+        console.log('[clickApply - Final] Success indicator detected after attempt', attempt);
+        break;
+      }
+  
+      // Screenshot for debug
+      await p.screenshot({ path: `debug-final-click-attempt-${attempt}-${Date.now()}.png`, fullPage: true });
+      console.log('[clickApply - Final] Screenshot saved for attempt', attempt);
     }
-
-    throw new Error('Final Submit/Apply button not found');
+  
+    if (clickSuccess) {
+      console.log('[clickApply - Final] SUCCESS - button click appears to have worked');
+      await p.waitForTimeout(10000); // give time for redirect or toast
+    } else {
+      console.warn('[clickApply - Final] No success detected after 5 attempts');
+      await p.screenshot({ path: `debug-final-click-failed-all-${Date.now()}.png`, fullPage: true });
+    }
   }
 
   async readToastOrStatus() {
     const p = this.page;
 
-    // Exact success toast text you showed
-    const successToast = p.locator('text=Share has been applied successfully.').first();
-    if (await successToast.isVisible({ timeout: 8000 }).catch(() => false)) {
-      return 'Share has been applied successfully.';
-    }
+    // Success toast
+    const success = await p.locator('text=Share has been applied successfully').first().isVisible({ timeout: 10000 }).catch(() => false);
+    if (success) return 'Share has been applied successfully.';
 
-    // General toast/alert containers
-    const selectors = ['.toast', '.alert', '[role="alert"]', '.mat-snack-bar-container'];
-    for (const sel of selectors) {
-      const el = p.locator(sel).first();
-      const txt = await el.textContent().catch(() => null);
-      if (txt && txt.trim()) return txt.trim();
-    }
+    // Other toasts/alerts
+    const toast = p.locator('.toast, .alert, [role="alert"], .mat-snack-bar-container').first();
+    const text = await toast.textContent().catch(() => '');
+    if (text?.trim()) return text.trim();
 
-    // Fallback scan
-    const body = await p.textContent('body').catch(() => '');
-    const m = body.match(
-      /(Share has been applied successfully|TRANSACTION_SUCCESS|BLOCKED_APPROVE|APPROVED|success|submitted|failed|error)[^\n]{0,160}/i
-    );
-    return m?.[0]?.trim() || '';
+    // Fallback body scan
+    const bodyText = await p.textContent('body').catch(() => '');
+    const match = bodyText.match(/(success|applied|submitted|TRANSACTION_SUCCESS|APPROVED|BLOCKED_APPROVE|error|failed)[^\n]{0,200}/i);
+    return match ? match[0].trim() : 'No status message found';
   }
 
   /**
@@ -347,29 +292,32 @@ class IpoApplyPage {
     const min = Number(data.minUnit || 10);
 
     await this.waitReady();
+    console.log('[apply START]');
 
-    // Bank + Account: pick single option safely (or match by name if provided)
-    await this.fillBankAndAccount({ bankName: data.bankName, accountNo: data.accountNo });
+    try {
+      await this.fillBankAndAccount({ bankName: data.bankName, accountNo: data.accountNo });
+      await this.fillKitta(min);
+      await this.fillCRN(data.crn);
+      await this.acceptDisclaimer();
+      await this.clickProceed();
+      await this.fillTxnPin(data.txnPin);
+      await this.clickApply();
 
-    await this.fillKitta(min);
-    await this.fillCRN(data.crn);
-    await this.acceptDisclaimer();
+      const msg = await this.readToastOrStatus();
+      console.log('[apply] Final message:', msg);
 
-    await this.clickProceed();
+      const ok = /success|applied|submitted|TRANSACTION_SUCCESS|APPROVED|BLOCKED_APPROVE/i.test(msg);
 
-    // Transaction PIN screen
-    await this.fillTxnPin(data.txnPin);
-    await this.clickApply();
+      if (!ok) {
+        await this.page.screenshot({ path: `debug-apply-fail-${Date.now()}.png`, fullPage: true });
+      }
 
-    const msg = await this.readToastOrStatus();
-    const ok =
-      /share has been applied successfully|success|submitted|transaction_success|approved|blocked_approve/i.test(msg);
-
-    if (!ok) {
-      log.warn(`Apply may not have succeeded. Message: ${msg}`);
+      return { ok, message: msg || 'No confirmation received' };
+    } catch (err) {
+      console.error('[apply] Error during form fill/submit:', err.message);
+      await this.page.screenshot({ path: `debug-apply-error-${Date.now()}.png`, fullPage: true });
+      return { ok: false, message: err.message };
     }
-
-    return { ok, message: msg || 'Submitted (no message)' };
   }
 }
 
