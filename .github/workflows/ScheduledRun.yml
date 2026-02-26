@@ -2,7 +2,7 @@ name: MeroShare IPO Bot
 
 on:
   schedule:
-    - cron: '15 9 * * 1,4,6'   # Mon, Thu, Sat @ 15:00 NPT (09:15 UTC)
+    - cron: '15 9 * * 0,2,5'   # Mon, Thu, Sat @ 15:00 NPT (09:15 UTC)
   workflow_dispatch:
 
 jobs:
