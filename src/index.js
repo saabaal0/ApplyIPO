@@ -51,19 +51,18 @@ async function main() {
 
   report.foundCount = rawIssues.length;
 
-  // ──────────────────────────────────────────────
-  // NEW: Cross-check against active applicant forms (real source of truth)
-  // ──────────────────────────────────────────────
+  // Cross-check against active applicant forms (real source of truth)
   let activeForms = [];
   try {
     activeForms = await api.getAllActiveApplicantForms(token, { pageSize: 200, maxPages: 5 });
+    log.info(`Active applicant forms found: ${activeForms.length}`);
   } catch (e) {
     log.warn("Failed to fetch active forms: " + e.message);
   }
 
   const appliedCompanyIds = new Set(activeForms.map(f => Number(f.companyShareId)));
 
-  // Classify using only applicantFormId from applicableIssue + active forms check
+  // Classify using applicantFormId + active forms check (ignore statusName from applicableIssue)
   const classified = rawIssues.map(issue => {
     const fromActiveForms = appliedCompanyIds.has(Number(issue.companyShareId));
     const c = classify(issue);
@@ -126,7 +125,7 @@ async function main() {
       await runner.login();
 
       for (const issue of eligible) {
-        // Right-share holding check (unchanged)
+        // Right-share holding check
         if (issue.kind === "RIGHT_SHARE") {
           let bal = 0;
           try {
@@ -169,40 +168,69 @@ async function main() {
           continue;
         }
 
-        // Verification (unchanged)
-        const verify = await retry(
-          async () => {
-            let list = await api.getApplicableIssues(token);
-            return list.find(x => Number(x.companyShareId) === Number(issue.companyShareId)) || null;
-          },
-          { retries: 2, delayMs: 1500 }
-        ).catch(() => null);
+        // ──────────────────────────────────────────────
+        // VERIFICATION: Re-login + poll active forms (strongest confirmation)
+        // ──────────────────────────────────────────────
+        try {
+          log.info(`[Verification] Re-logging in to API for fresh token (${issue.scrip})`);
+          token = await api.login();
+          log.info('[Verification] API re-login successful');
+        } catch (e) {
+          log.warn('[Verification] API re-login failed:', e.message);
+        }
 
-        if (
-          verify &&
-          (verify.applicantFormId ||
-            ["TRANSACTION_SUCCESS", "APPROVED", "BLOCKED_APPROVE"].includes(
-              String(verify.statusName || "").toUpperCase()
-            ))
-        ) {
+        let verify = null;
+        const maxWaitMs = 30000; // 30 seconds max poll
+        const start = Date.now();
+
+        while (Date.now() - start < maxWaitMs) {
+          try {
+            const forms = await api.getAllActiveApplicantForms(token);
+            verify = forms.find(f => Number(f.companyShareId) === Number(issue.companyShareId));
+            if (verify) {
+              log.info('[Verification] Found in active forms - success');
+              break;
+            }
+          } catch (e) {
+            log.warn('[Verification] Active forms poll error:', e.message);
+          }
+          await new Promise(r => setTimeout(r, 3000)); // 3s interval
+        }
+
+        if (verify) {
           report.applied.push({
             scrip: issue.scrip,
             companyName: issue.companyName,
-            note: `Submitted. Status: ${verify.statusName || "UNKNOWN"}${verify.applicantFormId ? ` (ID ${verify.applicantFormId})` : ""}`
+            note: `Submitted & confirmed in active forms (status: ${verify.statusName || 'unknown'})`
           });
         } else {
+          // UI fallback with re-login check
+          try {
+            log.info(`[Verification UI] Checking session for ${issue.scrip}`);
+            const isLoggedIn = await runner.isLoggedIn();
+            if (!isLoggedIn) {
+              log.info('[Verification UI] Session expired - re-logging in');
+              await runner.login();
+              log.info('[Verification UI] UI re-login successful');
+            } else {
+              log.info('[Verification UI] Still logged in');
+            }
+          } catch (e) {
+            log.warn('[Verification UI] Re-login attempt failed:', e.message);
+          }
+
           const ui = await runner.verifyInApplicationReport(issue.scrip).catch(() => ({ found: false }));
           if (ui?.found) {
             report.applied.push({
               scrip: issue.scrip,
               companyName: issue.companyName,
-              note: `Submitted (verified in report: ${ui.status || "UNKNOWN"})`
+              note: `Submitted (verified in UI Application Report: ${ui.status || 'UNKNOWN'})`
             });
           } else {
             report.manualCheck.push({
               scrip: issue.scrip,
               companyName: issue.companyName,
-              note: "Applied but could not verify — check manually"
+              note: 'Applied but no confirmation yet — check manually'
             });
           }
         }

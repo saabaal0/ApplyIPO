@@ -23,19 +23,17 @@ class AutomationRunner {
   }
 
   async start() {
-    this.browser = await chromium.launch({ 
+    this.browser = await chromium.launch({
       headless: this.runtime.headless,
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--no-sandbox'
-      ]
+      args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
     });
-    
+
     this.context = await this.browser.newContext({
       viewport: { width: 1400, height: 900 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     });
-    
+
     this.page = await this.context.newPage();
     this.page.setDefaultTimeout(45000);
     log.info("Browser started (headless: " + this.runtime.headless + ")");
@@ -60,7 +58,7 @@ class AutomationRunner {
     const ensurePageAlive = async () => {
       const pageClosed = !this.page || this.page.isClosed?.();
       const ctxClosed = !this.context || this.context.isClosed?.();
-      
+
       if (pageClosed || ctxClosed) {
         log.warn("Page/context was closed. Recreating browser context...");
         await this.stop().catch(() => {});
@@ -152,7 +150,9 @@ class AutomationRunner {
     const hasApply = await asba.rowHasApply(row);
 
     if (!hasApply) {
-      const found = await this.verifyInApplicationReport(issue.scrip).catch(() => null);
+      const found = await this.verifyInApplicationReport(issue.scrip).catch(
+        () => null,
+      );
 
       if (found?.found) {
         return {
@@ -167,7 +167,12 @@ class AutomationRunner {
       };
     }
 
-    if (!this.cfg.bankName || !this.cfg.accountNo || !this.cfg.crn || !this.cfg.txnPin) {
+    if (
+      !this.cfg.bankName ||
+      !this.cfg.accountNo ||
+      !this.cfg.crn ||
+      !this.cfg.txnPin
+    ) {
       return {
         status: "manual",
         note: "Auto-apply not configured (missing bank/account/CRN/PIN)",
@@ -182,20 +187,28 @@ class AutomationRunner {
     }
 
     const navigated = await Promise.race([
-      this.page.waitForSelector('text=/Bank|Kitta|CRN|Proceed|Disclaimer/i', {
-        timeout: 20000,
-      }).then(() => true).catch(() => false),
-      
-      this.page.waitForURL(/apply|form|ipo-apply|kitta/i, { 
-        timeout: 20000 
-      }).then(() => true).catch(() => false),
+      this.page
+        .waitForSelector("text=/Bank|Kitta|CRN|Proceed|Disclaimer/i", {
+          timeout: 20000,
+        })
+        .then(() => true)
+        .catch(() => false),
+
+      this.page
+        .waitForURL(/apply|form|ipo-apply|kitta/i, {
+          timeout: 20000,
+        })
+        .then(() => true)
+        .catch(() => false),
     ]);
 
     if (!navigated) {
-      await this.page.screenshot({ 
-        path: `debug-no-navigation-${Date.now()}.png`,
-        fullPage: true
-      }).catch(() => {});
+      await this.page
+        .screenshot({
+          path: `debug-no-navigation-${Date.now()}.png`,
+          fullPage: true,
+        })
+        .catch(() => {});
       return {
         status: "manual",
         note: "Apply clicked but no form loaded - check manually",
@@ -203,7 +216,7 @@ class AutomationRunner {
     }
 
     const form = new IpoApplyPage(this.page);
-    
+
     let res;
     try {
       res = await form.apply({
@@ -217,7 +230,7 @@ class AutomationRunner {
       log.warn("Form submission failed: " + e.message);
       return {
         status: "manual",
-        note: `Form submission error: ${e.message}`
+        note: `Form submission error: ${e.message}`,
       };
     }
 
@@ -229,7 +242,7 @@ class AutomationRunner {
     return {
       status: res.ok ? "applied" : "manual",
       note: res.message,
-      meta: { minUnit: minUnit || 10 }
+      meta: { minUnit: minUnit || 10 },
     };
   }
 
@@ -238,6 +251,45 @@ class AutomationRunner {
     await nav.gotoApplicationReport();
     const ar = new ApplicationReportPage(this.page);
     return ar.findByScrip(scrip);
+  }
+  /**
+   * Check if the current browser session is still logged in to MeroShare
+   * @returns {Promise<boolean>}
+   */
+  async isLoggedIn() {
+    const p = this.page;
+    try {
+      // Fast URL check
+      if (p.url().includes("#/login") || p.url().includes("login")) {
+        return false;
+      }
+
+      // Check for logged-in elements (navbar, profile, etc.)
+      const indicators = [
+        "text=My ASBA",
+        "text=My Share",
+        "text=Application Report",
+        "text=My Portfolio",
+        "text=Logout",
+        ".navbar-brand", // persistent header
+      ];
+
+      for (const sel of indicators) {
+        if (
+          await p
+            .locator(sel)
+            .first()
+            .isVisible({ timeout: 4000 })
+            .catch(() => false)
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
   }
 }
 
