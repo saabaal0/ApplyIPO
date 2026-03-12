@@ -98,18 +98,15 @@ class IpoApplyPage {
       .or(p.locator('input[name="transactionPIN"]'))
       .or(p.locator('[name="transactionPIN"]'))
       .first();
-
     if (await pinInput.isVisible({ timeout: 15000 }).catch(() => false)) {
       await pinInput.fill('');
       await pinInput.pressSequentially(pin, { delay: 150 });
       await pinInput.press('Tab');
-
       const applyBtn = p.getByRole('button', { name: /Apply/i })
         .or(p.locator('button:has-text("Apply")'))
         .or(p.locator('button[type="submit"]:has-text("Apply")'))
         .first();
       await applyBtn.waitFor({ state: 'visible', timeout: 20000 });
-
       let attempts = 0;
       while (attempts < 25) {
         const isEnabled = await applyBtn.evaluate(btn => !btn.disabled);
@@ -127,8 +124,10 @@ class IpoApplyPage {
       log.warn("Transaction PIN input not visible");
     }
   }
+
   async clickApply() {
     const p = this.page;
+
     const applyBtn = p.getByRole('button', { name: /Apply/i })
       .or(p.locator('button:has-text("Apply")'))
       .or(p.locator('button[type="submit"]:has-text("Apply")'))
@@ -136,19 +135,23 @@ class IpoApplyPage {
 
     if (!(await applyBtn.isVisible({ timeout: 15000 }).catch(() => false))) {
       log.warn("Final Apply button not visible");
+      await p.screenshot({ path: `debug-final-apply-missing-${Date.now()}.png`, fullPage: true });
       return;
     }
 
     const isEnabled = await applyBtn.evaluate(btn => !btn.disabled);
     if (!isEnabled) {
       log.warn("Final Apply button disabled");
+      await p.screenshot({ path: `debug-final-apply-disabled-${Date.now()}.png`, fullPage: true });
       return;
     }
 
+    // Realistic mouse click simulation
     const box = await applyBtn.boundingBox().catch(() => null);
     if (box) {
       const centerX = box.x + box.width / 2;
       const centerY = box.y + box.height / 2;
+
       await p.mouse.move(centerX, centerY, { steps: 10 });
       await p.waitForTimeout(300);
       await p.mouse.down();
@@ -156,21 +159,71 @@ class IpoApplyPage {
       await p.mouse.move(centerX + 5, centerY + 3, { steps: 5 });
       await p.waitForTimeout(100);
       await p.mouse.up();
+
+      log.info("Realistic mouse click simulation completed on final Apply button");
     } else {
       await applyBtn.click({ force: true, timeout: 15000 });
+      log.info("Normal click executed on final Apply button");
     }
 
+    // ──────────────────────────────────────────────
+    // SMART WAIT: Wait for redirect + poll for success toast
+    // ──────────────────────────────────────────────
+    log.info("Waiting for redirect back to My ASBA / Current Issue after final Apply");
+
     try {
+      // Wait for redirect (most common success behavior)
       await p.waitForURL(/#\/asba|my-asba|current-issue/i, { timeout: 20000 });
-    } catch (_) {
-      log.warn("No redirect to My ASBA after Apply - check result manually");
+      log.info("Redirect detected to My ASBA / Current Issue page");
+    } catch {
+      log.warn("No redirect detected within 20s - staying on current page");
     }
-    await p.waitForTimeout(5000);
+
+    // Poll for success toast (multiple checks with increasing delay)
+    const successSelectors = [
+      'text=Share has been applied successfully',
+      'text=Application submitted',
+      'text=Applied Kitta',
+      'text=Success',
+      'text=Submitted',
+      'text=TRANSACTION_SUCCESS'
+    ];
+
+    let toastFound = false;
+    const maxPollAttempts = 8;
+    let pollDelay = 2000;
+
+    for (let attempt = 1; attempt <= maxPollAttempts; attempt++) {
+      log.info(`[Toast Poll] Attempt ${attempt}/${maxPollAttempts} - waiting ${pollDelay}ms`);
+
+      await p.waitForTimeout(pollDelay);
+
+      for (const sel of successSelectors) {
+        if (await p.locator(sel).first().isVisible({ timeout: 4000 }).catch(() => false)) {
+          const text = await p.locator(sel).first().textContent() || '';
+          log.info(`[Toast Poll] SUCCESS TOAST FOUND: ${text.trim()}`);
+          toastFound = true;
+          break;
+        }
+      }
+
+      if (toastFound) break;
+
+      // Increase delay for next poll
+      pollDelay = Math.min(pollDelay * 1.5, 6000);
+    }
+
+    if (!toastFound) {
+      log.warn("No success toast detected after full polling - check Application Report manually");
+      await p.screenshot({ path: `debug-no-toast-after-submit-${Date.now()}.png`, fullPage: true });
+    }
   }
 
   async readToastOrStatus() {
     const p = this.page;
-    await p.waitForTimeout(10000);
+
+    // Give extra time after redirect
+    await p.waitForTimeout(5000);
 
     const successSelectors = [
       'text=Share has been applied successfully',
@@ -180,6 +233,7 @@ class IpoApplyPage {
       'text=Submitted',
       'text=TRANSACTION_SUCCESS'
     ];
+
     for (const sel of successSelectors) {
       if (await p.locator(sel).first().isVisible({ timeout: 8000 }).catch(() => false)) {
         const text = await p.locator(sel).first().textContent();
@@ -204,7 +258,6 @@ class IpoApplyPage {
   async apply(data) {
     const min = Number(data.minUnit || 10);
     await this.waitReady();
-
     try {
       await this.fillBankAndAccount({ bankName: data.bankName, accountNo: data.accountNo });
       await this.fillKitta(min);
@@ -214,11 +267,21 @@ class IpoApplyPage {
       await this.fillTxnPin(data.txnPin);
       await this.clickApply();
 
+      // Final toast read after redirect + polling
       const msg = await this.readToastOrStatus();
       const ok = /success|applied|submitted|TRANSACTION_SUCCESS|APPROVED|BLOCKED_APPROVE/i.test(msg);
+
+      log.info(`[apply] Final message: ${msg}`);
+      if (ok) {
+        log.info("[apply] Local success detected");
+      } else {
+        log.warn("[apply] No local success message - check Application Report");
+      }
+
       return { ok, message: msg || 'No confirmation received' };
     } catch (err) {
       log.error("Apply form error: " + err.message);
+      await this.page.screenshot({ path: `debug-apply-error-${Date.now()}.png`, fullPage: true });
       return { ok: false, message: err.message };
     }
   }
