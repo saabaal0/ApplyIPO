@@ -30,12 +30,12 @@ Supports multiple user profiles, intelligent filtering, Telegram notifications, 
 git clone https://github.com/YOUR_USERNAME/meroshare-IPO-automation.git
 cd meroshare-IPO-automation
 npm install
-
+```
 ## Setup (.env)
-
+```
 # Telegram (required for reports)
-TELEGRAM_BOT_TOKEN=123456789:AAFxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TELEGRAM_CHAT_ID=-1001234567890
+TELEGRAM_BOT_TOKEN=XXXXXXX:xxxxxxxxxxx
+TELEGRAM_CHAT_ID=-xxxxxxxxxxx
 
 # ────────────── Profile 1  ──────────────
 MEROSHARE_NAME_1=
@@ -62,8 +62,8 @@ MEROSHARE_TXN_PIN_2=xxxx
 # Runtime
 HEADLESS=true           # true = silent (production), false = watch browser
 RUN_MODE=multi          # multi = all profiles, single = only profile 1
-
-Security notes:
+```
+## Security notes:
 
 Never commit .env
 Use exact strings from MeroShare dropdown for bank/account
