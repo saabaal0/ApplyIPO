@@ -1,129 +1,70 @@
-# ApplyIPO – MeroShare IPO Automation 🤖
+# MeroShare IPO Automation Bot
 
-Automates **IPO/FPO application on MeroShare** using UI automation and sends **daily Telegram reports**.
-Supports **multiple users** (e.g. self + spouse) and runs **locally or via GitHub Actions** on a schedule.
+Fully automated tool to apply for IPOs/FPOs on [MeroShare](https://meroshare.cdsc.com.np) using Node.js + Playwright.
 
----
+Supports multiple user profiles, intelligent filtering, Telegram notifications, and scheduled runs via GitHub Actions.
+
+**For personal use only. Use responsibly and comply with CDSC/MeroShare terms.**
 
 ## Features
 
-- Checks for new **IPO / FPO**
-- Auto-applies for:
-  - Ordinary Shares
-  - IPO / FPO
-  - For General Public
-- Skips:
-  - Debentures
-  - Mutual Funds
-  - Rights shares (unless holding exists)
-- Detects:
-  - Already applied
-  - BLOCKED_APPROVE / APPROVED / TRANSACTION_SUCCESS
-- Multi-user support
-- Telegram daily summary
-- Auto-retry on login / apply failures
-- GitHub Actions scheduled execution
+- Detects open eligible IPOs/FPOs (ordinary shares, general public quota)
+- Skips debentures, right shares without holding, already applied issues
+- Multi-profile support (you + family members)
+- Full UI automation: login → My ASBA → apply → fill form → PIN → submit
+- Smart verification: toast + active forms polling + UI Application Report fallback
+- Beautiful Telegram reports with per-user sections and emojis
+- Scheduled runs via GitHub Actions (Mon/Thu/Sat 15:00 NPT)
+- Headless mode for production
 
----
+## Requirements
 
-## Tech Stack
+- Node.js 18+ (20 recommended)
+- Playwright Chromium
+- Telegram bot token + chat ID
+- Valid MeroShare credentials (per profile)
 
-- Node.js
-- Playwright (Chromium)
-- GitHub Actions
-- Telegram Bot API
+## Installation
 
----
-
-## Project Structure
-
-```
-src/
-├─ pages/
-├─ services/
-├─ api/
-├─ telegram/
-├─ utils/
-├─ index.js
-└─ multi-user.js
-.github/workflows/
-└─ meroshare-bot.yml
-```
-
----
-
-## Local Setup
-
-### Install
-```
+```bash
+git clone https://github.com/YOUR_USERNAME/meroshare-IPO-automation.git
+cd meroshare-IPO-automation
 npm install
-npx playwright install chromium
-```
 
-### Environment file
-Create `.env` (do NOT commit).
+## Setup (.env)
 
-```
-MEROSHARE_CLIENT_ID=
-MEROSHARE_DP_NAME=
-MEROSHARE_USERNAME=
-MEROSHARE_PASSWORD=
-MEROSHARE_BANK_NAME=
-MEROSHARE_ACCOUNT_NO=
-MEROSHARE_CRN=
-MEROSHARE_TXN_PIN=
+# Telegram (required for reports)
+TELEGRAM_BOT_TOKEN=123456789:AAFxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TELEGRAM_CHAT_ID=-1001234567890
 
-MEROSHARE_CLIENT_ID_WIFE=
-MEROSHARE_DP_NAME_WIFE=
-MEROSHARE_USERNAME_WIFE=
-MEROSHARE_PASSWORD_WIFE=
-MEROSHARE_BANK_NAME_WIFE=
-MEROSHARE_ACCOUNT_NO_WIFE=
-MEROSHARE_CRN_WIFE=
-MEROSHARE_TXN_PIN_WIFE=
+# ────────────── Profile 1  ──────────────
+MEROSHARE_NAME_1=
+MEROSHARE_CLIENT_ID_1=xxxxxxxx
+MEROSHARE_DP_NAME_1=xxxxxxxx
+MEROSHARE_USERNAME_1=xxxxxxxx
+MEROSHARE_PASSWORD_1=xxxxxxxx
+MEROSHARE_BANK_NAME_1=xxxxxxxx
+MEROSHARE_ACCOUNT_NO_1=xxxxxxxx SAVING ACCOUNT
+MEROSHARE_CRN_1=xxxxxxxx
+MEROSHARE_TXN_PIN_1=xxxxxxxx
 
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_CHAT_ID=
+# ────────────── Profile 2  ──────────────
+MEROSHARE_NAME_2=
+MEROSHARE_CLIENT_ID_2=xxxxxxxx
+MEROSHARE_DP_NAME_2=xxxxxxxx
+MEROSHARE_USERNAME_2=xxxxxxxx
+MEROSHARE_PASSWORD_2=xxxxxxxx
+MEROSHARE_BANK_NAME_2=xxxxxxxx
+MEROSHARE_ACCOUNT_NO_2=xxxxxxxx - SAVING ACCOUNT
+MEROSHARE_CRN_2=xxxxxxxx
+MEROSHARE_TXN_PIN_2=xxxx
 
-HEADLESS=false
-```
+# Runtime
+HEADLESS=true           # true = silent (production), false = watch browser
+RUN_MODE=multi          # multi = all profiles, single = only profile 1
 
----
+Security notes:
 
-## Run
-
-Single user:
-```
-npm start
-```
-
-Multi-user:
-```
-node src/multi-user.js
-```
-
----
-
-## GitHub Actions
-
-Runs automatically at **15:00 Nepal Time**
-(Monday, Thursday, Saturday)
-
-Workflow:
-```
-.github/workflows/meroshare-bot.yml
-```
-
----
-
-## Disclaimer
-
-For personal automation and educational use only.
-Use responsibly and comply with MeroShare/CDSC terms.
-
----
-
-## Author
-
-Sabal Gautam  
-https://github.com/saabaal0
+Never commit .env
+Use exact strings from MeroShare dropdown for bank/account
+CRN must be correct (wrong CRN = silent failure)
