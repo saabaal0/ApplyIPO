@@ -1,6 +1,6 @@
 # MeroShare IPO Automation Bot
 
-Fully automated tool to apply for IPOs/FPOs on [MeroShare](https://meroshare.cdsc.com.np) using Node.js + Playwright.
+Fully automated tool to apply for IPOs/FPOs on [MeroShare](https://meroshare.cdsc.com.np) using Node.js and Playwright.
 
 Supports multiple user profiles, intelligent filtering, Telegram notifications, and scheduled runs via GitHub Actions.
 
