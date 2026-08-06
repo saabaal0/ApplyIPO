@@ -4,7 +4,7 @@ Fully automated tool to apply for IPOs/FPOs on [MeroShare](https://meroshare.cds
 
 Supports multiple user profiles, intelligent filtering, Telegram notifications, and scheduled runs via GitHub Actions.
 
-**For personal use only. Use responsibly and comply with CDSC/MeroShare terms.**
+For personal use only. Use responsibly and comply with CDSC/MeroShare terms.
 
 ## Features
 
