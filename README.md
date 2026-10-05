@@ -7,7 +7,6 @@ Supports multiple user profiles, intelligent filtering, Telegram notifications, 
 For personal use only. Use responsibly and comply with CDSC/MeroShare terms.
 
 ## Features
-
 - Detects open eligible IPOs/FPOs (ordinary shares, general public quota)
 - Skips debentures, right shares without holding, already applied issues
 - Multi-profile support (you + family members)
